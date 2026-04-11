@@ -5,7 +5,7 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000; // Updated to 10000 for better Render compatibility
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -67,7 +67,7 @@ async function getOpenRouterResponse(messages) {
     headers: {
       'Authorization': 'Bearer ' + process.env.OPENROUTER_API_KEY,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3000',
+      'HTTP-Referer': 'https://telmed-ai-doctor.onrender.com', // Updated to your live URL
       'X-Title': 'Telmed AI Doctor'
     }
   });
@@ -132,5 +132,5 @@ app.post('/api/analyze-image', async (req, res) => {
 });
 
 app.listen(PORT, function() {
-  console.log('Telmed AI Doctor v3.0 running on http://localhost:' + PORT);
+  console.log('Telmed AI Doctor v3.0 running on port ' + PORT);
 });
