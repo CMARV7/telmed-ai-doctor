@@ -2,10 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-require('dotenv').config();
+
+// Only use dotenv for local development
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
 
 const app = express();
-const PORT = process.env.PORT || 10000; // Updated to 10000 for better Render compatibility
+const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -15,17 +19,17 @@ const MEDICAL_PROMPT = `You are Dr. Telmed, a warm, experienced medical doctor, 
 
 Rules:
 - Be conversational and warm, like a real doctor (be friendly, empathetic, and supportive)
-- Keep responses under 120 words unless condition is serious or complex  ( dont overwhelm users with too much information at once)
+- Keep responses under 120 words unless condition is serious or complex
 - Suggest possible conditions when symptoms are described (as many as you can, but make it clear these are just possibilities, not a diagnosis)
 - Recommend medications available in Nigeria (like paracetamol, amoxicillin, etc.) when appropriate, but always suggest seeing a doctor for proper diagnosis
 - Give simple treatment steps generic enough to be safe for most conditions (like rest, hydration, over-the-counter meds) but avoid specific medical advice without diagnosis
 - Provide emotional support when needed and encourage users to seek in-person care when symptoms are severe or worsening
 - If emergency symptoms (chest pain, difficulty breathing, severe bleeding), urge immediate hospital visit
-- Never repeat long disclaimers in every message (always act like a doctor, not a legal advisor)
-- Talk naturally like: "Based on what you've described, this sounds like it could be... dont be rude at any time to the user(benign possibilities) but it's important to see a doctor for an accurate diagnosis. In the meantime, you might try... (simple, safe advice). If you experience... (red flag symptoms), please go to the hospital immediately."`; 
+- Never repeat long disclaimers in every message
+- Talk naturally: "Based on what you've described, this sounds like it could be... but it's important to see a doctor for an accurate diagnosis."`; 
 
 async function getGeminiResponse(messages) {
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
   const response = await axios.post(url, {
     system_instruction: { parts: [{ text: MEDICAL_PROMPT }] },
     contents: messages.map(m => ({
@@ -47,7 +51,7 @@ async function getGroqResponse(messages) {
     max_tokens: 300
   }, {
     headers: {
-      'Authorization': 'Bearer ' + process.env.GROQ_API_KEY,
+      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       'Content-Type': 'application/json'
     }
   });
@@ -65,9 +69,9 @@ async function getOpenRouterResponse(messages) {
     max_tokens: 300
   }, {
     headers: {
-      'Authorization': 'Bearer ' + process.env.OPENROUTER_API_KEY,
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://telmed-ai-doctor.onrender.com', // Updated to your live URL
+      'HTTP-Referer': 'https://telmed-ai-doctor.onrender.com',
       'X-Title': 'Telmed AI Doctor'
     }
   });
@@ -75,17 +79,37 @@ async function getOpenRouterResponse(messages) {
 }
 
 async function getAIResponse(messages) {
-  try {
-    return await getGroqResponse(messages);
-  } catch (e) {
-    console.log('Groq failed, trying Gemini...');
+  // Try Groq First
+  if (process.env.GROQ_API_KEY) {
     try {
-      return await getGeminiResponse(messages);
-    } catch (e2) {
-      console.log('Gemini failed, trying OpenRouter...');
-      return await getOpenRouterResponse(messages);
+      console.log('Attempting Groq...');
+      return await getGroqResponse(messages);
+    } catch (e) {
+      console.error('Groq Error:', e.response ? e.response.data : e.message);
     }
   }
+
+  // Fallback to Gemini
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      console.log('Attempting Gemini...');
+      return await getGeminiResponse(messages);
+    } catch (e2) {
+      console.error('Gemini Error:', e2.response ? e2.response.data : e2.message);
+    }
+  }
+
+  // Final Fallback to OpenRouter
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      console.log('Attempting OpenRouter...');
+      return await getOpenRouterResponse(messages);
+    } catch (e3) {
+      console.error('OpenRouter Error:', e3.response ? e3.response.data : e3.message);
+    }
+  }
+
+  throw new Error("No active AI services responded or keys are missing.");
 }
 
 app.get('/api/health', (req, res) => {
@@ -98,12 +122,11 @@ app.post('/api/chat', async (req, res) => {
     if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
     const messages = [...(history || []), { role: 'user', content: message }];
     const result = await getAIResponse(messages);
-    console.log('Response from ' + result.provider);
+    console.log('Response delivered by ' + result.provider);
     res.json({ success: true, response: result.text, provider: result.provider });
   } catch (error) {
-    const err = error.response ? JSON.stringify(error.response.data) : error.message;
-    console.error('All APIs failed:', err);
-    res.status(500).json({ success: false, error: 'All AI services unavailable. Please try again.' });
+    console.error('Chat controller failed:', error.message);
+    res.status(500).json({ success: false, error: 'All AI services unavailable. Please try again later.' });
   }
 });
 
@@ -111,7 +134,7 @@ app.post('/api/analyze-image', async (req, res) => {
   try {
     const { imageBase64, mimeType, message } = req.body;
     if (!imageBase64) return res.status(400).json({ success: false, error: 'Image is required' });
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     const response = await axios.post(url, {
       system_instruction: { parts: [{ text: MEDICAL_PROMPT }] },
       contents: [{
@@ -125,9 +148,8 @@ app.post('/api/analyze-image', async (req, res) => {
     const result = response.data.candidates[0].content.parts[0].text;
     res.json({ success: true, response: result, provider: 'Gemini Vision' });
   } catch (error) {
-    const err = error.response ? JSON.stringify(error.response.data) : error.message;
-    console.error('Image analysis error:', err);
-    res.status(500).json({ success: false, error: 'Image analysis failed. Please try again.' });
+    console.error('Image analysis error:', error.message);
+    res.status(500).json({ success: false, error: 'Image analysis failed.' });
   }
 });
 
