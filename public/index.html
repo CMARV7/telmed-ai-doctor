@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Telmed AI Doctor</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif}
+    :root{
+      --bg:#08080f;
+      --sidebar:#0d0d1a;
+      --card:#12121f;
+      --border:#1a1a2e;
+      --purple:#7C3AED;
+      --purple-light:#A78BFA;
+      --purple-dim:rgba(124,58,237,0.12);
+      --text:#eeeef5;
+      --muted:#6060808;
+      --green:#10B981;
+    }
+    body{background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+    .app{display:flex;height:100vh;overflow:hidden}
+
+    /* SIDEBAR */
+    .sidebar{width:275px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:transform 0.3s}
+    .sidebar-top{padding:16px;border-bottom:1px solid var(--border)}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .brand-icon{width:44px;height:44px;background:linear-gradient(135deg,#7C3AED,#4F46E5);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+    .brand-text h2{font-size:16px;font-weight:700;color:#fff}
+    .brand-text p{font-size:11px;color:var(--purple-light);margin-top:1px}
+    .new-btn{width:100%;background:var(--purple);color:#fff;border:none;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s}
+    .new-btn:hover{background:#6D28D9;transform:translateY(-1px)}
+    .section-label{padding:14px 16px 6px;font-size:10px;color:#404060;text-transform:uppercase;letter-spacing:1.2px;font-weight:600}
+    .conv-list{flex:1;overflow-y:auto;padding:4px 8px}
+    .conv-list::-webkit-scrollbar{width:3px}
+    .conv-list::-webkit-scrollbar-thumb{background:#1a1a30;border-radius:3px}
+    .conv-item{padding:10px 12px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.2s;margin-bottom:2px}
+    .conv-item:hover{background:var(--card)}
+    .conv-item.active{background:var(--purple-dim);border:1px solid rgba(124,58,237,0.25)}
+    .conv-icon{font-size:14px;flex-shrink:0;opacity:0.7}
+    .conv-info{flex:1;min-width:0}
+    .conv-name{font-size:13px;color:#cccce0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .conv-item.active .conv-name{color:var(--purple-light);font-weight:500}
+    .conv-date{font-size:10px;color:#404060;margin-top:2px}
+    .conv-actions{display:flex;gap:2px;opacity:0;transition:opacity 0.2s}
+    .conv-item:hover .conv-actions{opacity:1}
+    .conv-act-btn{background:none;border:none;color:#404060;cursor:pointer;padding:3px 5px;border-radius:5px;font-size:12px;transition:all 0.2s}
+    .conv-act-btn:hover{background:rgba(255,255,255,0.06);color:#ccc}
+    .conv-act-btn.del:hover{background:rgba(255,68,68,0.1);color:#ff6666}
+
+    /* SIDEBAR FOOTER - CREDITS */
+    .sidebar-footer{padding:16px;border-top:1px solid var(--border)}
+    .disclaimer{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:10px 12px;margin-bottom:14px}
+    .disclaimer p{font-size:11px;color:#d4a520;line-height:1.6}
+    .disclaimer strong{font-size:11px;color:#f0b429}
+    .credits-box{background:var(--purple-dim);border:1px solid rgba(124,58,237,0.2);border-radius:10px;padding:12px 14px;text-align:center}
+    .credits-created{font-size:11px;color:#8080a0;margin-bottom:6px}
+    .credits-name{font-size:14px;font-weight:700;color:#ffffff;margin-bottom:2px;letter-spacing:0.3px}
+    .credits-brand{font-size:12px;color:var(--purple-light);font-weight:600;margin-bottom:8px}
+    .credits-divider{height:1px;background:rgba(124,58,237,0.2);margin:8px 0}
+    .credits-powered{font-size:10px;color:#505070;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.8px}
+    .credits-apis{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+    .api-tag{background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.25);color:var(--purple-light);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+
+    /* MAIN */
+    .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+    .chat-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--sidebar)}
+    .header-left{display:flex;align-items:center;gap:10px}
+    .menu-btn{display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}
+    .menu-btn:hover{background:var(--card)}
+    .h-avatar{width:40px;height:40px;background:linear-gradient(135deg,#7C3AED,#4F46E5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 0 20px rgba(124,58,237,0.3)}
+    .doc-info p{font-size:15px;font-weight:600;color:#fff}
+    .doc-info span{font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;margin-top:1px}
+    .live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;display:inline-block;animation:livePulse 2s infinite}
+    @keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+    .voice-btn{background:linear-gradient(135deg,#7C3AED,#4F46E5);color:#fff;border:none;padding:9px 18px;border-radius:22px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all 0.2s;box-shadow:0 4px 15px rgba(124,58,237,0.3)}
+    .voice-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.4)}
+    .voice-btn.in-call{background:linear-gradient(135deg,#dc2626,#b91c1c);box-shadow:0 4px 15px rgba(220,38,38,0.3)}
+
+    /* MESSAGES */
+    .messages{flex:1;overflow-y:auto;padding:24px 20px;display:flex;flex-direction:column;gap:16px}
+    .messages::-webkit-scrollbar{width:4px}
+    .messages::-webkit-scrollbar-thumb{background:#1a1a2e;border-radius:4px}
+
+    /* WELCOME */
+    .welcome{text-align:center;padding:50px 20px;max-width:520px;margin:0 auto}
+    .welcome-icon{font-size:70px;margin-bottom:20px;filter:drop-shadow(0 0 30px rgba(124,58,237,0.5))}
+    .welcome h2{font-size:28px;font-weight:700;margin-bottom:12px;background:linear-gradient(135deg,#ffffff,#A78BFA);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .welcome p{font-size:14px;color:#6060808;line-height:1.8;margin-bottom:28px;color:#8080a0}
+    .quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:420px;margin:0 auto}
+    .quick-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;text-align:left;transition:all 0.25s}
+    .quick-card:hover{border-color:var(--purple);background:var(--purple-dim);transform:translateY(-3px);box-shadow:0 8px 25px rgba(124,58,237,0.15)}
+    .qicon{font-size:24px;margin-bottom:10px}
+    .quick-card p{font-size:13px;color:var(--text);font-weight:600;margin-bottom:3px}
+    .quick-card span{font-size:11px;color:#6060808;color:#606080}
+
+    /* BUBBLES */
+    .message{display:flex;gap:10px;animation:fadeIn 0.3s ease;max-width:800px}
+    .message.user{flex-direction:row-reverse;margin-left:auto}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .msg-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .message.ai .msg-av{background:linear-gradient(135deg,#7C3AED,#4F46E5)}
+    .message.user .msg-av{background:var(--card);border:1px solid var(--border)}
+    .msg-body{max-width:78%}
+    .msg-bubble{padding:13px 17px;border-radius:18px;font-size:14px;line-height:1.75}
+    .message.ai .msg-bubble{background:var(--card);border:1px solid var(--border);border-top-left-radius:4px;color:var(--text)}
+    .message.user .msg-bubble{background:linear-gradient(135deg,#7C3AED,#5B21B6);color:#fff;border-top-right-radius:4px}
+    .msg-img{max-width:220px;border-radius:12px;margin-bottom:8px;border:1px solid var(--border)}
+    .msg-meta{font-size:10px;color:#404060;margin-top:5px;display:flex;align-items:center;gap:6px}
+    .message.user .msg-meta{justify-content:flex-end}
+    .ptag{background:var(--purple-dim);color:var(--purple-light);padding:2px 8px;border-radius:4px;font-size:9px;border:1px solid rgba(124,58,237,0.2)}
+
+    /* TYPING */
+    .typing{display:flex;gap:10px;align-items:center}
+    .typing-bub{background:var(--card);border:1px solid var(--border);border-radius:18px;border-top-left-radius:4px;padding:14px 18px;display:flex;gap:5px;align-items:center}
+    .typing-bub span{width:7px;height:7px;background:var(--purple);border-radius:50%;animation:bounce 1.2s infinite}
+    .typing-bub span:nth-child(2){animation-delay:0.2s}
+    .typing-bub span:nth-child(3){animation-delay:0.4s}
+    @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)}}
+
+    /* VOICE MODAL */
+    .vmodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(12px)}
+    .vmodal.show{display:flex}
+    .vcard{background:var(--card);border:1px solid var(--border);border-radius:28px;padding:44px 36px;text-align:center;width:340px;position:relative}
+    .vdoc-wrap{position:relative;width:100px;height:100px;margin:0 auto 20px}
+    .vdoc-av{width:100px;height:100px;background:linear-gradient(135deg,#7C3AED,#4F46E5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:50px;position:relative;z-index:2;box-shadow:0 0 40px rgba(124,58,237,0.4)}
+    .vring{position:absolute;inset:-10px;border-radius:50%;border:2px solid rgba(124,58,237,0.25);animation:vring 2s infinite}
+    .vring2{position:absolute;inset:-20px;border-radius:50%;border:2px solid rgba(124,58,237,0.12);animation:vring 2s infinite 0.5s}
+    @keyframes vring{0%{transform:scale(1);opacity:1}100%{transform:scale(1.4);opacity:0}}
+    .vcard h3{font-size:22px;font-weight:700;color:#fff;margin-bottom:4px}
+    .vcard .vsub{font-size:13px;color:#8080a0;margin-bottom:6px}
+    .vstatus{font-size:13px;color:var(--purple-light);min-height:20px;margin-bottom:20px;font-weight:500}
+    .vcontrols{display:flex;align-items:center;justify-content:center;gap:16px}
+    .vmic{width:72px;height:72px;border-radius:50%;border:none;font-size:28px;cursor:pointer;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;transition:all 0.2s;box-shadow:0 4px 20px rgba(124,58,237,0.4)}
+    .vmic:hover{transform:scale(1.05)}
+    .vmic.listening{background:#dc2626;box-shadow:0 4px 20px rgba(220,38,38,0.4);animation:micring 1s infinite}
+    @keyframes micring{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0.4)}50%{box-shadow:0 0 0 16px rgba(220,38,38,0)}}
+    .vend{width:52px;height:52px;border-radius:50%;border:1px solid rgba(220,38,38,0.3);font-size:22px;cursor:pointer;background:rgba(220,38,38,0.1);color:#ff6666;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+    .vend:hover{background:rgba(220,38,38,0.2)}
+    .vhint{font-size:11px;color:#404060;margin-top:20px}
+
+    /* INPUT */
+    .input-area{padding:14px 20px 16px;border-top:1px solid var(--border);background:var(--sidebar)}
+    .img-preview-wrap{display:none;align-items:center;gap:10px;padding:8px 0}
+    .img-preview-wrap.show{display:flex}
+    .prev-thumb{width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+    .prev-name{flex:1;font-size:12px;color:#8080a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .prev-rm{background:#ff4444;border:none;border-radius:50%;color:#fff;width:22px;height:22px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .ibox-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px 14px;display:flex;align-items:flex-end;gap:10px;transition:border-color 0.2s}
+    .ibox-wrap:focus-within{border-color:rgba(124,58,237,0.5)}
+    .ibtns{display:flex;gap:4px}
+    .ibtn{background:none;border:none;color:#404060;cursor:pointer;font-size:18px;padding:4px;border-radius:6px;transition:all 0.2s;display:flex;align-items:center}
+    .ibtn:hover{color:var(--purple-light);background:var(--purple-dim)}
+    .msginput{flex:1;background:none;border:none;color:var(--text);font-size:14px;resize:none;outline:none;min-height:24px;max-height:120px;font-family:inherit;line-height:1.6}
+    .msginput::placeholder{color:#404060}
+    .sbtn{width:38px;height:38px;background:var(--purple);border:none;border-radius:9px;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;flex-shrink:0}
+    .sbtn:hover{background:#6D28D9;transform:scale(1.05)}
+    .sbtn:disabled{opacity:0.35;cursor:not-allowed;transform:none}
+    .ihint{font-size:11px;color:#252535;text-align:center;margin-top:8px}
+
+    /* RENAME MODAL */
+    .rmodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:150;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
+    .rmodal.show{display:flex}
+    .rcard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;width:300px}
+    .rcard h3{font-size:16px;font-weight:600;margin-bottom:16px;color:#fff}
+    .rinput{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;margin-bottom:14px;font-family:inherit}
+    .rinput:focus{border-color:var(--purple)}
+    .rbtns{display:flex;gap:8px;justify-content:flex-end}
+    .rcancel{background:none;border:1px solid var(--border);color:#8080a0;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px}
+    .rsave{background:var(--purple);color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+
+    /* MOBILE */
+    @media(max-width:768px){
+      .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%)}
+      .sidebar.open{transform:translateX(0)}
+      .menu-btn{display:block}
+      .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99}
+      .overlay.show{display:block}
+      .quick-grid{grid-template-columns:1fr}
+      .voice-btn span{display:none}
+      .vcard{width:290px;padding:36px 24px}
+    }
+  </style>
+</head>
+<body>
+
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- RENAME MODAL -->
+<div class="rmodal" id="rmodal">
+  <div class="rcard">
+    <h3>✏️ Rename Conversation</h3>
+    <input class="rinput" id="rinput" placeholder="Enter new name..." maxlength="40">
+    <div class="rbtns">
+      <button class="rcancel" onclick="closeRename()">Cancel</button>
+      <button class="rsave" onclick="saveRename()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- VOICE MODAL -->
+<div class="vmodal" id="vmodal">
+  <div class="vcard">
+    <div class="vdoc-wrap">
+      <div class="vdoc-av">🤖</div>
+      <div class="vring"></div>
+      <div class="vring2"></div>
+    </div>
+    <h3>Dr. Telmed AI</h3>
+    <div class="vsub">Voice Consultation</div>
+    <div class="vstatus" id="vstatus">Press the mic and speak</div>
+    <div class="vcontrols">
+      <button class="vend" onclick="endCall()">📵</button>
+      <button class="vmic" id="vmic" onclick="toggleMic()">🎤</button>
+    </div>
+    <p class="vhint">Press mic → Speak → AI responds with voice</p>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">🤖</div>
+        <div class="brand-text">
+          <h2>Telmed AI Doctor</h2>
+          <p>Your 24/7 Medical Assistant</p>
+        </div>
+      </div>
+      <button class="new-btn" onclick="newChat()">✏️ New Conversation</button>
+    </div>
+
+    <div class="section-label">Conversations</div>
+    <div class="conv-list" id="convList"></div>
+
+    <div class="sidebar-footer">
+      <div class="disclaimer">
+        <strong>⚠️ Medical Disclaimer</strong>
+        <p>This is an AI assistant for guidance only. Always consult a real doctor for confirmed diagnosis and treatment.</p>
+      </div>
+      <div class="credits-box">
+        <div class="credits-created">Created by</div>
+        <div class="credits-name">Marvelous Chinwendu Uzoma</div>
+        <div class="credits-brand">MARV-TECH</div>
+        <div class="credits-divider"></div>
+        <div class="credits-powered">Powered by</div>
+        <div class="credits-apis">
+          <span class="api-tag">Google Gemini</span>
+          <span class="api-tag">Groq</span>
+          <span class="api-tag">OpenRouter</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="chat-header">
+      <div class="header-left">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <div class="h-avatar">🤖</div>
+        <div class="doc-info">
+          <p>Dr. Telmed AI</p>
+          <span><span class="live-dot"></span>Available 24/7</span>
+        </div>
+      </div>
+      <button class="voice-btn" id="voiceBtn" onclick="startCall()">
+        📞 <span>Voice Call</span>
+      </button>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <div class="input-area">
+      <div class="img-preview-wrap" id="imgWrap">
+        <img class="prev-thumb" id="imgPrev" src="" alt="">
+        <span class="prev-name" id="imgName"></span>
+        <button class="prev-rm" onclick="removeImg()">✕</button>
+      </div>
+      <div class="ibox-wrap">
+        <div class="ibtns">
+          <button class="ibtn" onclick="document.getElementById('imgFile').click()" title="Upload image">🖼️</button>
+          <input type="file" id="imgFile" accept="image/*" style="display:none" onchange="onImgSelect(event)">
+        </div>
+        <textarea class="msginput" id="uinput" placeholder="Describe your symptoms or ask a health question..." rows="1" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+        <button class="sbtn" id="sbtn" onclick="send()">➤</button>
+      </div>
+      <p class="ihint">Enter to send · Shift+Enter new line · 🖼️ upload image · 📞 voice call</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // STATE
+  let convs = JSON.parse(localStorage.getItem('telmed_v4') || '[]');
+  let activeId = null;
+  let loading = false;
+  let selImg = null;
+  let renameId = null;
+
+  // VOICE
+  let recog = null;
+  let listening = false;
+  let callActive = false;
+  const synth = window.speechSynthesis;
+
+  // INIT
+  window.onload = function() {
+    renderList();
+    convs.length > 0 ? loadConv(convs[0].id) : newChat();
+    setupSpeech();
+  };
+
+  // SPEECH SETUP
+  function setupSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    recog = new SR();
+    recog.continuous = false;
+    recog.interimResults = false;
+    recog.lang = 'en-NG';
+
+    recog.onstart = function() {
+      listening = true;
+      document.getElementById('vmic').classList.add('listening');
+      setStatus('🔴 Listening... speak now');
+    };
+
+    recog.onresult = function(e) {
+      const text = e.results[0][0].transcript;
+      listening = false;
+      document.getElementById('vmic').classList.remove('listening');
+      setStatus('⏳ Dr. Telmed is thinking...');
+      sendVoice(text);
+    };
+
+    recog.onerror = function(e) {
+      listening = false;
+      document.getElementById('vmic').classList.remove('listening');
+      setStatus('Could not hear you. Try again.');
+    };
+
+    recog.onend = function() {
+      listening = false;
+      document.getElementById('vmic').classList.remove('listening');
+    };
+  }
+
+  function setStatus(msg) {
+    document.getElementById('vstatus').textContent = msg;
+  }
+
+  function startCall() {
+    if (!recog) {
+      alert('Voice calls require Google Chrome. Please open this app in Chrome.');
+      return;
+    }
+    callActive = true;
+    document.getElementById('vmodal').classList.add('show');
+    setStatus('Press the mic and speak');
+    speak('Hello! I am Dr. Telmed AI. How can I help you today?', function() {
+      setStatus('Press the mic and speak');
+    });
+  }
+
+  function endCall() {
+    callActive = false;
+    listening = false;
+    if (recog) try { recog.stop(); } catch(e) {}
+    synth.cancel();
+    document.getElementById('vmodal').classList.remove('show');
+    document.getElementById('vmic').classList.remove('listening');
+  }
+
+  function toggleMic() {
+    if (!recog) return;
+    if (listening) {
+      recog.stop();
+    } else {
+      synth.cancel();
+      setStatus('🔴 Listening... speak now');
+      try { recog.start(); } catch(e) { setStatus('Please wait and try again.'); }
+    }
+  }
+
+  async function sendVoice(text) {
+    const conv = convs.find(c => c.id === activeId);
+    if (!conv) return;
+    const history = conv.messages.slice(-8).map(m => ({
+      role: m.role === 'ai' ? 'assistant' : 'user',
+      content: m.content
+    }));
+    try {
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: history })
+      });
+      const data = await r.json();
+      if (data.success) {
+        conv.messages.push({ role: 'user', content: text });
+        conv.messages.push({ role: 'ai', content: data.response, provider: data.provider });
+        saveConvs();
+        renderMsg('user', text, null, null, true);
+        renderMsg('ai', data.response, data.provider, null, true);
+        setStatus('🔊 Dr. Telmed is speaking...');
+        speak(data.response, function() {
+          if (callActive) setStatus('Press the mic and speak');
+        });
+      } else {
+        setStatus('Could not get response. Try again.');
+      }
+    } catch(e) {
+      setStatus('Connection error. Please try again.');
+    }
+  }
+
+  function speak(text, cb) {
+    synth.cancel();
+    const clean = text.replace(/[*#_`>\-]/g, '').substring(0, 400);
+    const u = new SpeechSynthesisUtterance(clean);
+    u.rate = 0.92; u.pitch = 1.05; u.volume = 1;
+    const voices = synth.getVoices();
+    const v = voices.find(v => v.lang.includes('en-GB') && v.name.toLowerCase().includes('female')) ||
+              voices.find(v => v.lang.includes('en') && v.name.toLowerCase().includes('female')) ||
+              voices.find(v => v.lang.startsWith('en')) || voices[0];
+    if (v) u.voice = v;
+    if (cb) u.onend = cb;
+    synth.speak(u);
+  }
+
+  // SIDEBAR
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('show');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+  }
+
+  // CONVS
+  function genId() { return 'c' + Date.now() + Math.random().toString(36).substr(2,4); }
+  function getTime() { return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); }
+  function saveConvs() { localStorage.setItem('telmed_v4', JSON.stringify(convs)); }
+
+  function newChat() {
+    const c = { id: genId(), title: 'New Conversation', messages: [], createdAt: new Date().toISOString() };
+    convs.unshift(c);
+    saveConvs();
+    renderList();
+    loadConv(c.id);
+    closeSidebar();
+  }
+
+  function loadConv(id) {
+    activeId = id;
+    renderList();
+    const conv = convs.find(c => c.id === id);
+    if (!conv) return;
+    const el = document.getElementById('messages');
+    el.innerHTML = '';
+    if (conv.messages.length === 0) {
+      showWelcome();
+    } else {
+      conv.messages.forEach(m => renderMsg(m.role, m.content, m.provider, m.imageUrl, false));
+      el.scrollTop = el.scrollHeight;
+    }
+    closeSidebar();
+  }
+
+  function delConv(id, e) {
+    e.stopPropagation();
+    if (!confirm('Delete this conversation?')) return;
+    convs = convs.filter(c => c.id !== id);
+    saveConvs();
+    if (activeId === id) convs.length > 0 ? loadConv(convs[0].id) : newChat();
+    renderList();
+  }
+
+  function openRename(id, name, e) {
+    e.stopPropagation();
+    renameId = id;
+    document.getElementById('rinput').value = name;
+    document.getElementById('rmodal').classList.add('show');
+    setTimeout(() => document.getElementById('rinput').focus(), 80);
+  }
+
+  function closeRename() {
+    document.getElementById('rmodal').classList.remove('show');
+    renameId = null;
+  }
+
+  function saveRename() {
+    const n = document.getElementById('rinput').value.trim();
+    if (!n) return;
+    const c = convs.find(c => c.id === renameId);
+    if (c) { c.title = n; saveConvs(); renderList(); }
+    closeRename();
+  }
+
+  document.getElementById('rinput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') saveRename();
+    if (e.key === 'Escape') closeRename();
+  });
+
+  function renderList() {
+    const el = document.getElementById('convList');
+    el.innerHTML = '';
+    if (convs.length === 0) {
+      el.innerHTML = '<div style="padding:24px 16px;color:#404060;font-size:13px;text-align:center">No conversations yet.<br>Start a new chat!</div>';
+      return;
+    }
+    convs.forEach(function(c) {
+      const date = new Date(c.createdAt).toLocaleDateString([],{month:'short',day:'numeric'});
+      const d = document.createElement('div');
+      d.className = 'conv-item' + (c.id === activeId ? ' active' : '');
+      d.onclick = function() { loadConv(c.id); };
+      d.innerHTML =
+        '<span class="conv-icon">💬</span>' +
+        '<div class="conv-info">' +
+          '<div class="conv-name">' + escHtml(c.title) + '</div>' +
+          '<div class="conv-date">' + date + '</div>' +
+        '</div>' +
+        '<div class="conv-actions">' +
+          '<button class="conv-act-btn" onclick="openRename(\'' + c.id + '\',\'' + c.title.replace(/'/g,"\\'") + '\',event)" title="Rename">✏️</button>' +
+          '<button class="conv-act-btn del" onclick="delConv(\'' + c.id + '\',event)" title="Delete">🗑</button>' +
+        '</div>';
+      el.appendChild(d);
+    });
+  }
+
+  function escHtml(t) {
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function setTitle(id, msg) {
+    const c = convs.find(c => c.id === id);
+    if (c && c.title === 'New Conversation') {
+      c.title = msg.substring(0,34) + (msg.length > 34 ? '...' : '');
+      saveConvs(); renderList();
+    }
+  }
+
+  // WELCOME
+  function showWelcome() {
+    document.getElementById('messages').innerHTML =
+      '<div class="welcome">' +
+        '<div class="welcome-icon">🤖</div>' +
+        '<h2>Hello, I\'m Dr. Telmed AI</h2>' +
+        '<p>Your personal medical assistant available 24/7. Describe your symptoms, ask health questions, upload medical images, or start a voice consultation.</p>' +
+        '<div class="quick-grid">' +
+          quickCard('🤒','Headache & Fever','Common symptoms','I have a headache and fever') +
+          quickCard('🔴','Skin Problems','Rash or irritation','I have a skin rash or irritation') +
+          quickCard('❤️','Chest & Breathing','Urgent symptoms','I have chest pain or difficulty breathing') +
+          quickCard('🧠','Mental Health','Emotional support','I need emotional or mental health support') +
+        '</div>' +
+      '</div>';
+  }
+
+  function quickCard(icon, title, sub, msg) {
+    return '<div class="quick-card" onclick="quickSend(\'' + msg.replace(/'/g,"\\'") + '\')">' +
+      '<div class="qicon">' + icon + '</div>' +
+      '<p>' + title + '</p>' +
+      '<span>' + sub + '</span>' +
+    '</div>';
+  }
+
+  // RENDER MSG
+  function renderMsg(role, content, provider, imageUrl, scroll) {
+    const w = document.querySelector('.welcome');
+    if (w) w.remove();
+    const el = document.getElementById('messages');
+    const d = document.createElement('div');
+    d.className = 'message ' + role;
+    const av = role === 'ai' ? '🤖' : '👤';
+    const fmt = content.replace(/\n/g,'<br>');
+    const pt = provider ? '<span class="ptag">' + provider + '</span>' : '';
+    const ih = imageUrl ? '<img class="msg-img" src="' + imageUrl + '" alt="">' : '';
+    d.innerHTML =
+      '<div class="msg-av">' + av + '</div>' +
+      '<div class="msg-body">' +
+        (ih ? '<div>' + ih + '</div>' : '') +
+        '<div class="msg-bubble">' + fmt + '</div>' +
+        '<div class="msg-meta">' + getTime() + ' ' + pt + '</div>' +
+      '</div>';
+    el.appendChild(d);
+    if (scroll !== false) el.scrollTop = el.scrollHeight;
+  }
+
+  function showTyping() {
+    const w = document.querySelector('.welcome');
+    if (w) w.remove();
+    const el = document.getElementById('messages');
+    const d = document.createElement('div');
+    d.className = 'typing'; d.id = 'typing';
+    d.innerHTML = '<div class="msg-av" style="background:linear-gradient(135deg,#7C3AED,#4F46E5)">🤖</div><div class="typing-bub"><span></span><span></span><span></span></div>';
+    el.appendChild(d);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function rmTyping() { const t = document.getElementById('typing'); if (t) t.remove(); }
+
+  // IMAGE
+  function onImgSelect(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = function(ev) {
+      selImg = { base64: ev.target.result.split(',')[1], mimeType: f.type, url: ev.target.result, name: f.name };
+      document.getElementById('imgPrev').src = ev.target.result;
+      document.getElementById('imgName').textContent = f.name;
+      document.getElementById('imgWrap').classList.add('show');
+    };
+    r.readAsDataURL(f);
+  }
+
+  function removeImg() {
+    selImg = null;
+    document.getElementById('imgFile').value = '';
+    document.getElementById('imgWrap').classList.remove('show');
+  }
+
+  // SEND
+  function resize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight,120) + 'px'; }
+  function onKey(e) { if (e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();} }
+  function quickSend(t) { document.getElementById('uinput').value = t; send(); }
+
+  async function send() {
+    if (loading) return;
+    const inp = document.getElementById('uinput');
+    const msg = inp.value.trim();
+    if (!msg && !selImg) return;
+
+    const conv = convs.find(c => c.id === activeId);
+    if (!conv) return;
+
+    inp.value = ''; inp.style.height = 'auto';
+    loading = true;
+    document.getElementById('sbtn').disabled = true;
+
+    const iUrl = selImg ? selImg.url : null;
+    const iB64 = selImg ? selImg.base64 : null;
+    const iMime = selImg ? selImg.mimeType : null;
+    const display = msg || 'Please analyze this image.';
+
+    renderMsg('user', display, null, iUrl);
+    conv.messages.push({ role: 'user', content: display, imageUrl: iUrl });
+    setTitle(activeId, display);
+    if (selImg) removeImg();
+    showTyping();
+
+    try {
+      let data;
+      if (iB64) {
+        const r = await fetch('/api/analyze-image', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ imageBase64: iB64, mimeType: iMime, message: msg })
+        });
+        data = await r.json();
+      } else {
+        const hist = conv.messages.slice(-10,-1).map(m => ({
+          role: m.role==='ai' ? 'assistant' : 'user',
+          content: m.content
+        }));
+        const r = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ message: msg, history: hist })
+        });
+        data = await r.json();
+      }
+
+      rmTyping();
+      if (data.success) {
+        renderMsg('ai', data.response, data.provider);
+        conv.messages.push({ role:'ai', content: data.response, provider: data.provider });
+        saveConvs();
+      } else {
+        renderMsg('ai', 'Sorry, I could not process your request. Please try again.');
+      }
+    } catch(e) {
+      rmTyping();
+      renderMsg('ai', 'Connection error. Please check your internet and try again.');
+    }
+
+    loading = false;
+    document.getElementById('sbtn').disabled = false;
+    document.getElementById('uinput').focus();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+deepseek = sk-b5a755b31b3b484d8587c90297426a88
+gemini = AIzaSyApt38W3a5ob7RrPBYhEudYe0wcOtjMnfs
