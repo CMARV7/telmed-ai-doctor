@@ -1,5 +1,0 @@
-groq = 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
-gemini = AIzaSyDKk_egLmfZFL1vlc-VbFiqPaaKr2bpdjY
-openrouters = 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
-
-
