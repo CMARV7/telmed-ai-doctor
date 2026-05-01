@@ -2,120 +2,241 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-
-if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config();
-}
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-const MEDICAL_PROMPT = `You are Dr. Telmed, a warm, experienced medical doctor, psychologist and therapist helping patients in Nigeria and West Africa.
-Rules:
-- Be conversational and warm, like a real doctor.
-- Suggest possible conditions (clear these are possibilities, not a diagnosis).
-- Recommend medications available in Nigeria (paracetamol, amoxicillin, etc.) when appropriate.
-- Urge immediate hospital visit for emergency symptoms (chest pain, breathing issues).`; 
+// FIREBASE SETUP
+const admin = require('firebase-admin');
+let db = null;
 
-// --- UPDATED STABLE MODELS FOR APRIL 2026 ---
-const GEMINI_MODEL = "gemini-2.5-flash"; // Stable version for 2026
-const GROQ_MODEL = "llama-3.3-70b-versatile"; 
-const OPENROUTER_MODEL = "google/gemini-2.5-flash:free"; // More reliable free model on OpenRouter
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY ?
+        process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : undefined
+    })
+  });
+  db = admin.firestore();
+  console.log('Firebase connected');
+} catch (err) {
+  console.log('Firebase not connected:', err.message);
+}
 
-async function getGeminiResponse(messages) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+// MEDICAL PROMPT
+const MEDICAL_PROMPT = `You are Dr. Telmed, an autonomous AI medical agent helping patients in Nigeria, West Africa and worldwide.
+
+RULES:
+- Keep responses under 100 words unless emergency
+- Be warm, direct and conversational
+- Never repeat disclaimers every message
+
+AUTONOMOUS BEHAVIOR:
+- EMERGENCY: Start with 🚨 - urge immediate hospital visit
+- SEVERE: Strongly recommend seeing a doctor today
+- MODERATE: Suggest home care and monitor symptoms
+- MILD: Give simple friendly home remedy advice`;
+
+// SEVERITY ASSESSMENT
+function assessSeverity(message) {
+  const msg = message.toLowerCase();
+  const emergency = ['chest pain','heart attack','stroke','cant breathe','cannot breathe','difficulty breathing','unconscious','seizure','severe bleeding','overdose','suicide','poisoning','choking','no pulse','collapsed'];
+  const severe = ['high fever','severe pain','blood in urine','blood in stool','coughing blood','vomiting blood','severe headache','confusion','numbness','paralysis','severe allergic','swollen throat','yellow eyes','jaundice'];
+  const moderate = ['fever','persistent','getting worse','three days','one week','two weeks','infection','swollen','discharge','painful urination','rash spreading'];
+  for (let k of emergency) { if (msg.includes(k)) return 'EMERGENCY'; }
+  for (let k of severe) { if (msg.includes(k)) return 'SEVERE'; }
+  for (let k of moderate) { if (msg.includes(k)) return 'MODERATE'; }
+  return 'MILD';
+}
+
+// AI FUNCTIONS
+async function getGeminiResponse(messages, severity) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY;
   const response = await axios.post(url, {
-    system_instruction: {
-      parts: [{ text: MEDICAL_PROMPT + '\nSeverity: ' + severity }]
-    },
+    system_instruction: { parts: [{ text: MEDICAL_PROMPT + '\nSeverity: ' + severity }] },
     contents: messages.map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }))
   }, { headers: { 'Content-Type': 'application/json' } });
-  return {
-    text: response.data.candidates[0].content.parts[0].text,
-    provider: 'Gemini'
-  };
+  return { text: response.data.candidates[0].content.parts[0].text, provider: 'Gemini' };
 }
 
-async function getOpenRouterResponse(messages) {
-  const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-    model: OPENROUTER_MODEL,
-    messages: [{ role: 'system', content: MEDICAL_PROMPT }, ...messages],
-  }, {
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json'
+async function getGroqResponse(messages, severity) {
+  const response = await axios.post(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: MEDICAL_PROMPT + '\nSeverity: ' + severity },
+        ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+      ],
+      temperature: 0.7,
+      max_tokens: 300
+    },
+    { headers: { 'Authorization': 'Bearer ' + process.env.GROQ_API_KEY, 'Content-Type': 'application/json' } }
+  );
+  return { text: response.data.choices[0].message.content, provider: 'Groq' };
+}
+
+async function getOpenRouterResponse(messages, severity) {
+  const response = await axios.post(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      model: 'mistralai/mistral-nemo',
+      messages: [
+        { role: 'system', content: MEDICAL_PROMPT + '\nSeverity: ' + severity },
+        ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+      ],
+      temperature: 0.7,
+      max_tokens: 300
+    },
+    {
+      headers: {
+        'Authorization': 'Bearer ' + process.env.OPENROUTER_API_KEY,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://telmed-ai-doctor.onrender.com',
+        'X-Title': 'Telmed AI Doctor'
+      }
     }
-  });
+  );
   return { text: response.data.choices[0].message.content, provider: 'OpenRouter' };
 }
 
-async function getGroqResponse(messages) {
-  const response = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-    model: GROQ_MODEL, 
-    messages: [{ role: 'system', content: MEDICAL_PROMPT }, ...messages],
-  }, {
-    headers: {
-      'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-      'Content-Type': 'application/json'
+async function getAIResponse(messages, severity) {
+  try { return await getGeminiResponse(messages, severity); } catch (e) {
+    console.log('Gemini failed, trying Groq...');
+    try { return await getGroqResponse(messages, severity); } catch (e2) {
+      console.log('Groq failed, trying OpenRouter...');
+      return await getOpenRouterResponse(messages, severity);
     }
-  );
-  return {
-    text: response.data.choices[0].message.content,
-    provider: 'Groq'
-  };
+  }
 }
 
-async function getAIResponse(messages) {
-  // PRIORITY: 1. Gemini -> 2. OpenRouter -> 3. Groq
-  if (process.env.GEMINI_API_KEY) {
-    try { return await getGeminiResponse(messages); } catch (e) { console.error('Gemini Failed'); }
+// FIREBASE SAVE
+async function saveConsultation(sessionId, userMessage, aiResponse, severity) {
+  if (!db) return;
+  try {
+    await db.collection('consultations').add({
+      sessionId, userMessage, aiResponse, severity,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      platform: 'Telmed AI Doctor'
+    });
+  } catch (err) {
+    console.log('Firebase save failed:', err.message);
   }
-  if (process.env.OPENROUTER_API_KEY) {
-    try { return await getOpenRouterResponse(messages); } catch (e) { console.error('OpenRouter Failed'); }
-  }
-  if (process.env.GROQ_API_KEY) {
-    try { return await getGroqResponse(messages); } catch (e) { console.error('Groq Failed'); }
-  }
-  throw new Error("All services failed.");
 }
+
+async function saveEmergencyAlert(sessionId, message, severity) {
+  if (!db) return;
+  if (severity !== 'EMERGENCY' && severity !== 'SEVERE') return;
+  try {
+    await db.collection('emergency_alerts').add({
+      sessionId, message, severity,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'unresolved'
+    });
+  } catch (err) {
+    console.log('Firebase emergency save failed:', err.message);
+  }
+}
+
+// ROUTES
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'Telmed AI Doctor v4.0', firebase: db ? 'connected' : 'not connected' });
+});
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, sessionId } = req.body;
+    if (!message) return res.status(400).json({ success: false, error: 'Message is required' });
+
+    const severity = assessSeverity(message);
     const messages = [...(history || []), { role: 'user', content: message }];
-    const result = await getAIResponse(messages);
-    res.json({ success: true, response: result.text, provider: result.provider });
+    const result = await getAIResponse(messages, severity);
+
+    const sid = sessionId || 'anon_' + Date.now();
+    await saveConsultation(sid, message, result.text, severity);
+    await saveEmergencyAlert(sid, message, severity);
+
+    res.json({ success: true, response: result.text, severity: severity, sessionId: sid });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'AI unavailable' });
+    const err = error.response ? JSON.stringify(error.response.data) : error.message;
+    console.error('All APIs failed:', err);
+    res.status(500).json({ success: false, error: 'AI service unavailable. Please try again.' });
   }
 });
 
 app.post('/api/analyze-image', async (req, res) => {
   try {
-    const { imageBase64, mimeType, message } = req.body;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const { imageBase64, mimeType, message, sessionId } = req.body;
+    if (!imageBase64) return res.status(400).json({ success: false, error: 'Image is required' });
+
+    const severity = assessSeverity(message || '');
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + process.env.GEMINI_API_KEY;
     const response = await axios.post(url, {
       system_instruction: { parts: [{ text: MEDICAL_PROMPT }] },
       contents: [{
         role: 'user',
         parts: [
-          { text: message || 'Analyze this image.' },
+          { text: message || 'Please analyze this medical image.' },
           { inline_data: { mime_type: mimeType || 'image/jpeg', data: imageBase64 } }
         ]
       }]
     }, { headers: { 'Content-Type': 'application/json' } });
-    res.json({ success: true, response: response.data.candidates[0].content.parts[0].text, provider: 'Gemini Vision' });
+
+    const result = response.data.candidates[0].content.parts[0].text;
+    const sid = sessionId || 'anon_' + Date.now();
+    await saveConsultation(sid, 'IMAGE: ' + (message || 'No description'), result, severity);
+
+    res.json({ success: true, response: result, severity: severity, sessionId: sid });
   } catch (error) {
-    console.error('Image analysis failed');
-    res.status(500).json({ success: false, error: 'Image analysis failed.' });
+    console.error('Image error:', error.message);
+    res.status(500).json({ success: false, error: 'Image analysis failed. Please try again.' });
   }
 });
 
-app.listen(PORT, () => console.log('Doctor is live on ' + PORT));
+app.get('/api/history/:sessionId', async (req, res) => {
+  if (!db) return res.json({ success: true, history: [] });
+  try {
+    const snapshot = await db.collection('consultations')
+      .where('sessionId', '==', req.params.sessionId)
+      .orderBy('timestamp', 'desc')
+      .limit(20)
+      .get();
+    const history = [];
+    snapshot.forEach(doc => history.push({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, history });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Could not fetch history' });
+  }
+});
+
+app.get('/api/emergencies', async (req, res) => {
+  if (!db) return res.json({ success: true, alerts: [] });
+  try {
+    const snapshot = await db.collection('emergency_alerts')
+      .orderBy('timestamp', 'desc')
+      .limit(10)
+      .get();
+    const alerts = [];
+    snapshot.forEach(doc => alerts.push({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, alerts });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Could not fetch alerts' });
+  }
+});
+
+app.listen(PORT, function() {
+  console.log('========================================');
+  console.log('  Telmed AI Doctor v4.0 - Autonomous');
+  console.log('  Running on http://localhost:' + PORT);
+  console.log('========================================');
+});
